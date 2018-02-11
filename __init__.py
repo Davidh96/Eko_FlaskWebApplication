@@ -35,7 +35,10 @@ def cleanJson(result):
 
 		json = json.replace(newEventString,"}},{'")
 
-		json= json.replace("'","\"")
+		#json 'loads' accepts strings with double quotes
+		json= json.replace("':","\":")
+		json= json.replace("',","\",")
+		json= json.replace("'}","\"}")
 
 		return(json)
 
@@ -43,17 +46,19 @@ def cleanJson(result):
 def removeUnicode(formatedJSON):
 			unicodeChar = "u'"
 
-			formatedJSON = formatedJSON.replace(unicodeChar,"'")
+			formatedJSON = formatedJSON.replace(unicodeChar,"\"")
 			return formatedJSON
 
 def haversine(userLocation,eventLocation):
 	radius = 6372.8 #earths radius(km)
 	parsePoint = ','
 
+	#parse the users location
 	parseLocation = userLocation.rfind(parsePoint)
 	userLat=float(userLocation[:parseLocation])
 	userLong=float(userLocation[parseLocation+1:])
 
+	#parse the location of the event
 	parseLocation = eventLocation.rfind(parsePoint)
 	eventLat=float(eventLocation[:parseLocation])
 	eventLong=float(eventLocation[parseLocation+1:])
@@ -77,9 +82,7 @@ def getEvents(location,distance):
 
 	#places data into json object
 	data  = json.loads(temp)
-	#id=[]
-	events="{'events': ["
-	#distance = ""
+	events='{"events":'
 
 	#go through events
 	for event in data['events']:
@@ -95,9 +98,9 @@ def getEvents(location,distance):
 			events = events + str(event) + ","
 
 	#end events string
-	events = events[:len(events)-1] + "]}"
+	events = events[:len(events)-1] + "}"
 	#return list
-	return removeUnicode(str(events))
+	return cleanJson(str(events))
 
 
 #page used for testing
