@@ -13,15 +13,13 @@ def index():
 	result= firebase.get('/',None)
 	result=str(cleanJson(str(result)))
 	return str(result)
+	#return str("\"'\"")
 
 #tidies up JSON before displaying
 def cleanJson(result):
-		eventsString = "{'events': "
+		eventsString = "u'events': "
 		json = str(result)
-		newEventString ="}, '"
-
-		#remove unicode charachter
-		json=removeUnicode(json)
+		newEventString ="}, u'"
 
 		#find start of events list
 		position =json.find(eventsString) + len(eventsString)
@@ -33,22 +31,27 @@ def cleanJson(result):
 
 		json = json[:position] + "]" + json[position:]
 
-		json = json.replace(newEventString,"}},{'")
+		json = json.replace(newEventString,"}},{u'")
 
-		#json 'loads' accepts strings with double quotes
-		json= json.replace("':","\":")
-		json= json.replace("',","\",")
-		json= json.replace("'}","\"}")
+		#remove unicode charachter
+		json=removeUnicode(json)
 
 		return(json)
 
 #removes the unicode charachter
-def removeUnicode(formatedJSON):
-			unicodeChar = "u'"
+def removeUnicode(json):
+			unicodeChar1 = "u'"
+			unicodeChar2 = 'u"'
 
-			formatedJSON = formatedJSON.replace(unicodeChar,"\"")
-			return formatedJSON
+			json = json.replace(unicodeChar1,"\"")
+			json = json.replace(unicodeChar2,"\"")
+			#json 'loads' accepts strings with double quotes
+			json= json.replace("':","\":")
+			json= json.replace("',","\",")
+			json= json.replace("'}","\"}")
+			return json
 
+#calculates distance betwwen t
 def haversine(userLocation,eventLocation):
 	radius = 6372.8 #earths radius(km)
 	parsePoint = ','
@@ -66,7 +69,7 @@ def haversine(userLocation,eventLocation):
 	#haversine formulae
 	a = sin(radians(eventLat-userLat)/2)**2 + cos(radians(userLat)) * cos(radians(eventLat)) * sin(radians(eventLong-userLong)/2)**2
 	b = 2*atan2(sqrt(a),sqrt(1-a))
-	return b*radius
+	return float(b*radius)
 
 #displays select events
 @app.route('/retrieveEvents/<id>')
@@ -82,25 +85,32 @@ def getEvents(location,distance):
 
 	#places data into json object
 	data  = json.loads(temp)
-	events='{"events":'
+	events="{u'events': "
 
-	#go through events
-	for event in data['events']:
-		temp=removeUnicode(str(event))
-		#event key
-		temp = temp[2:22]
-		#get event location
-		eventlocation = event[temp]['eventLocation']
+	for event in data["events"]:
+		keyStartPos = str(event).find("-")
+		keyEndPos = str(event).find("\':")
+
+		key = str(event)[keyStartPos:keyEndPos]
+
+		eventLocation = str(event[key]['eventLocation'])
 		#get its distance from user
-		distanceBetween = haversine(location,eventlocation)
-		#if event is within defined distance, add it to be returned to user
-		if float(distanceBetween)<=float(distance):
+
+		distanceBetween = haversine(location,eventLocation)
+
+		if distanceBetween<float(distance):
 			events = events + str(event) + ","
 
 	#end events string
 	events = events[:len(events)-1] + "}"
-	#return list
+
 	return cleanJson(str(events))
+
+#this is used to calculate distance between two points
+@app.route('/distCalc/<location1>/<location2>')
+def getDist(location1,location2):
+	distanceBetween = haversine(location1,location2)
+	return str(distanceBetween)
 
 
 #page used for testing
