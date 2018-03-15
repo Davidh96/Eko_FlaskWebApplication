@@ -26,7 +26,7 @@ def getEvents(location,distance):
 	result= firebase.get('/',None)
 	start = "{\"events\": "
 
-	result = ast.literal_eval(json.dumps(result))
+	#result = json.dumps(result)
 	events = {}
 	for event in result['events']:
 		key = event
@@ -42,6 +42,7 @@ def getEvents(location,distance):
 			events[key] = eventDoc
 
 	return json.dumps(events)
+	#return "result"
 
 
 #this is used to calculate distance between two points
