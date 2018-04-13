@@ -7,11 +7,12 @@ from math import radians, sin, cos, sqrt, atan2
 import pandas as pd
 import numpy as np
 from scipy.sparse.linalg import svds
+import requests as rq
 #from sklearn.model_selection import train_test_split
 #from sklearn.metrics import mean_squared_error, mean_absolute_err
 
 app = Flask(__name__)
-firebase = firebase.FirebaseApplication('',None)
+firebase = firebase.FirebaseApplication('https://ekoapp-ba9b5.firebaseio.com/',None)
 
 #displays all events
 @app.route('/')
@@ -25,9 +26,165 @@ def retrieveEvents(id):
 	result= firebase.get('/events/' +id,None)
 	return json.dumps(result)
 
+#add member to event
+@app.route('/addMeber',methods=['POST'])
+def addMeber():
+	result = firebase.put('/events/-L9vhWFDVdP6iw7Jke4u','members', 'fuck')
+	return "ok"
+
+#get user details
+@app.route('/readUserDetails/<userID>',methods=['GET'])
+def readUserDetails(userID):
+	result = firebase.get('/users/'+ userID,None)
+	return json.dumps(result)
+
+#update user details
+@app.route('/updateUserDetails',methods=['POST'])
+def updateUserDetails():
+	user = request.json['userID']
+	name = request.json['userName']
+	token = request.json['userToken']
+	key = request.json['userKey']
+
+	#JSON format to be saved to database
+	myObj = {
+	    "DisplayName":name,
+	    "PublicKey":key,
+		"Token":token
+	}
+
+	result = firebase.put('/users',user,myObj)
+	return user
+
+#delete an event
+@app.route('/deleteEvent/<eventID>',methods=['DELETE'])
+def deleteEvent(eventID):
+	firebase.delete('/events', eventID)
+	return "user"
+
+#delete a member from an event
+@app.route('/deleteMember/<eventID>/<userID>',methods=['DELETE'])
+def deleteMember(eventID,userID):
+	result = firebase.get('/events/'+ eventID +'/members',None)
+	#firebase.delete('/events/'+eventID,userID)
+	temp="no"
+	i=0
+	for member in result:
+	    if member['id']==userID:
+	    	result.pop(i)
+	    	temp="heya"
+	    i+=1
+	result = firebase.put('/events/'+eventID,'members',result)
+	return json.dumps(result)
+
+#add a meber to an event
+@app.route('/addMember',methods=['POST'])
+def addMember():
+	eventID = request.json['eventID']
+	userID = request.json['userID']
+	result = firebase.get('/events/'+ eventID +'/members',None)
+
+	myObj = {
+	    "id":userID
+	}
+
+	result.append(myObj)
+	result = firebase.put('/events/'+eventID,'members',result)
+	return json.dumps(result)
+
+#add rating of event
+@app.route('/addRating',methods=['POST'])
+def addRating():
+	eventID = request.json['eventID']
+	userID = request.json['userID']
+	rating = request.json['Rating']
+
+	myObj = {
+	    "rating":rating
+	}
+
+	result = firebase.put('/users/'+ userID +'/rated', eventID,myObj)
+	return json.dumps(result)
+
+#post token
+@app.route('/postToken',methods=['POST'])
+def postToken():
+	token = request.json['userToken']
+	user = request.json['userID']
+	result = firebase.put('/users/' + user,'Token',token)
+	return str(result)
+
+#post public key
+@app.route('/postPublicKey',methods=['POST'])
+def postPublicKey():
+	key = request.json['userPublicKey']
+	user = request.json['userID']
+	result = firebase.put('/users/' + user,'PublicKey',key)
+	return str(result)
+
 #give events within a certain distance from a location
-@app.route('/getEvents',methods=['POST'])
-def getEvents():
+@app.route('/saveEvent',methods=['POST'])
+def saveEvent():
+	#get details from posted JSON
+	authorName = request.json['eventAuthor']
+	authorID = request.json['eventAuthorID']
+	eventCategory = request.json['eventCategory']
+	eventDate = request.json['eventDate']
+	eventDescription = request.json['eventDescription']
+	eventLocation = request.json['eventLocation']
+	eventName = request.json['eventName']
+	eventTime = request.json['eventTime']
+
+	#set JSON object
+	myObj = {
+	    "eventAuthor":authorName,
+	    "eventAuthorID":authorID,
+		"eventCategory":eventCategory,
+		"eventDate": eventDate,
+		"eventDescription": eventDescription,
+		"eventLocation": eventLocation,
+		"eventName": eventName,
+		"eventTime":eventTime,
+		"id":"fuck",
+	    "members": [
+	        { "id":authorID}
+	    ]
+	}
+
+
+	result = firebase.post('/events', myObj)
+	result = firebase.put('/events/' + result['name'],'id', result['name'])
+	return json.dumps(result)
+
+
+
+#give events within a certain distance from a location
+@app.route('/getEvents/<location>/<distance>')
+def getEvents(location,distance):
+	result= firebase.get('/',None)
+	start = "{\"events\": "
+
+	#result = json.dumps(result)
+	events = {}
+	for event in result['events']:
+		key = event
+		#get event with the key
+		eventDoc = result['events'][key]
+
+		eventLocation = str(eventDoc['eventLocation'])
+
+		#get its distance from user
+		distanceBetween = haversine(location,eventLocation)
+
+		if distanceBetween<float(distance):
+			events[key] = eventDoc
+
+	return json.dumps(events)
+
+
+#give events within a certain distance from a location
+@app.route('/getEventRecommendation',methods=['POST'])
+def getEventRecommendation():
 	#get details from posted JSON
 	location = request.json['location']
 	distance = request.json['distance']
@@ -50,27 +207,50 @@ def getEvents():
 				events[key] = eventDoc
 
 	recKey = getRecommendation(userID,events)
-
+	#get recommended event
 	if recKey != "None":
-		#reorganize json so rec appears first
-		del events[recKey]
 		result= firebase.get('/events/' + recKey,None)
 		eventList={}
 		eventList[recKey]=result
-		eventList = json.dumps(eventList)[:-1] + "," + json.dumps(events)[1:]
-		return eventList
+		return json.dumps(eventList)
 	else:
-		eventList = json.dumps(events)
-	return eventList
-	#return recKey
+	 	return "None"
 
-@app.route('/getRec',methods=['POST'])
-def getRec():
-	#
-	result= firebase.get('/users',None)
-	#userId = request.data
-	rec = getRecommendation(request.data)
-	return str(rec)
+	return json.dumps(result)
+
+
+@app.route('/sendMsg',methods=['POST'])
+def sendMsg():
+	#authorization header
+	headers = {'Content-Type': 'application/json',
+	'Authorization': 'key=AAAAWO9bQgM:APA91bFj2RlhOMQopRZC2Ca-cSJ3wwFwKZyPeRO_RhUtiJ6YxR2utqRJ-olYSEhuN_86kjy2c_oZeNaNfh5SU3YPhPaIIbL5rew9vb-GMPVLgqJx7qrDxC9rdS0uCze2iGnun-l1oSgD'}
+
+	#get contents of JSON
+	msgTo = request.json['to']
+	msgFromToken = request.json['fromToken']
+	msgFromPublicKey = request.json['fromKey']
+	msgFromID = request.json['fromID']
+	msgFromName = request.json['fromName']
+	msgData = request.json['data']
+
+
+	#format that FCM server accepts
+	url = 'https://fcm.googleapis.com/fcm/send'
+	payload={
+	 'to' : msgTo,
+	 'data' : {
+	     'fromToken': msgFromToken,
+		 'fromKey' : msgFromPublicKey,
+		 'fromID' : msgFromID,
+	     'fromName' : msgFromName,
+		 'msg' : msgData
+	 }
+	}
+
+	r = rq.post(url, data=json.dumps(payload), headers=headers)
+
+	return str(r)
+
 
 #this is used to calculate distance between two points
 @app.route('/distCalc/<location1>/<location2>')
@@ -91,21 +271,24 @@ def getRecommendation(userID,events):
 	arr = list()
 	userIds = list()
 	#get rated events
-	if firebase.get('/users',None) !=None:
+	#check for only users that have rated stuff
+	if firebase.get('/' + 'users',None) !=None:
 		for user in result['users']:
-		    userIds.append(user)
-		    for event in result['users'][user]:
-		        rating =result['users'][user][event]['rating']
-		        arr.append(list([user,event,rating]))
+			if firebase.get('/users/' + user + '/rated',None)!=None:
+			    userIds.append(user)
+			    for event in result['users'][user]['rated']:
+			        rating =result['users'][user]['rated'][event]['rating']
+			        arr.append(list([user,event,rating]))
 
 	#get events the user has already rated
 	alreadyRated = list()
-	user = firebase.get('/users/' + userID,None)
+	#check to see if user has actually rated anything
+	user = firebase.get('/users/rated' + userID,None)
 	if user != None:
-		for event in result['users'][userID]:
+		for event in result['users'][userID]['rated']:
 			alreadyRated.append(str(event))
 
-	#create dataframe
+	#create dataframes
 	usrevntDF = pd.DataFrame(arr, columns = ['UserID', 'EventID', 'Rating'], dtype = int)
 	eventsList = usrevntDF['EventID'].as_matrix()
 	ratingsDF = usrevntDF.pivot(index = 'UserID', columns ='EventID', values = 'Rating')
@@ -127,16 +310,13 @@ def getRecommendation(userID,events):
 
 	ratingsDF = train.copy()
 
-	#NEW STUFF
-	R = ratingsDF.as_matrix()
-
 	#matrix factorization
-	#need to change k
-
-	kNum =min(R.shape)-1
+	kNum =min(R_demeaned.shape)-1
 	if kNum>=1:
-		U, sigma, Vt = svds(R,k = kNum)
+		#perform svd
+		U, sigma, Vt = svds(R_demeaned,k = min(R_demeaned.shape)-1)
 
+		#convert sigma to diagonal matrix
 		sigma = np.diag(sigma)
 
 		predMat = np.dot(np.dot(U, sigma), Vt) + ratingMean.reshape(-1, 1)
@@ -158,7 +338,7 @@ def getRecommendation(userID,events):
 		temp="None"
 	return temp
 
-#calculates distance betwwen t
+#calculates distance betwwen two positions
 def haversine(userLocation,eventLocation):
 	radius = 6372.8 #earths radius(km)
 	parsePoint = ','
@@ -178,24 +358,6 @@ def haversine(userLocation,eventLocation):
 	b = 2*atan2(sqrt(a),sqrt(1-a))
 	return float(b*radius)
 
-def getBucket(location):
-	bucketLoc = location.replace(".","_")
-
-	parsePoint = ','
-
-	#parse the users location
-	parseLocation = bucketLoc.find(parsePoint)
-	userLat=bucketLoc[:parseLocation] + "00"
-	userLong=bucketLoc[parseLocation+1:] + "00"
-
-	latParse = userLat.find("_")
-	longParse = userLong.find("_")
-	userLat = userLat[:latParse+3]
-	userLong = userLong[:longParse+3]
-
-	bucketLoc = userLat + "," + userLong
-
-	return bucketLoc
 
 if __name__=="__main__":
 	app.run()
